@@ -121,44 +121,40 @@ func boardToPngBytes(board *chess.Board, squares ...chess.Square) ([]byte, error
 	return ioutil.ReadAll(pngFile)
 }
 
-func sendBoardImage(roomID mid.RoomID, board *chess.Board, squares ...chess.Square) error {
+func sendBoardImage(roomID mid.RoomID, board *chess.Board, squares ...chess.Square) (*mautrix.RespSendEvent, error) {
 	pngBytes, err := boardToPngBytes(board)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	upload, err := App.client.UploadBytesWithName(pngBytes, "image/png", "chessboard.png")
 	if err != nil {
-		return err
+		return nil, err
 	}
-	App.client.SendImage(roomID, "chessboard.png", upload.ContentURI)
-	return nil
+	return App.client.SendImage(roomID, "chessboard.png", upload.ContentURI)
 }
 
 var StateChessGame = mevent.Type{Type: "com.nevarro.chess.game", Class: mevent.StateEventType}
 
 type StateChessGameEventContent struct {
-	PGN string
+	PGN               string
+	BoardImageEventID mid.EventID
 }
 
-func saveGame(roomID mid.RoomID, game *chess.Game) (resp *mautrix.RespSendEvent, err error) {
-	log.Info("Saving")
+func saveGame(roomID mid.RoomID, game *chess.Game, boardImageEventID mid.EventID) (resp *mautrix.RespSendEvent, err error) {
 	return App.client.SendStateEvent(roomID, StateChessGame, "", StateChessGameEventContent{
-		PGN: game.String(),
+		PGN:               game.String(),
+		BoardImageEventID: boardImageEventID,
 	})
 }
 
-func getGame(roomID mid.RoomID) (*chess.Game, error) {
+func getGameStateEvent(roomID mid.RoomID) (*StateChessGameEventContent, error) {
 	var chessGame StateChessGameEventContent
 	err := App.client.StateEvent(roomID, StateChessGame, "", &chessGame)
 	if err != nil {
 		return nil, err
 	}
-	pgn, err := chess.PGN(strings.NewReader(chessGame.PGN))
-	if err != nil {
-		return nil, err
-	}
-	return chess.NewGame(pgn), nil
+	return &chessGame, nil
 }
 
 func handleCommand(source mautrix.EventSource, event *mevent.Event, commandParts []string) {
@@ -167,8 +163,10 @@ func handleCommand(source mautrix.EventSource, event *mevent.Event, commandParts
 		log.Info(commandParts)
 		game := chess.NewGame()
 		game.AddTagPair("Event", fmt.Sprintf("%s @ %s", event.RoomID.String(), time.Now()))
-		sendBoardImage(event.RoomID, game.Position().Board())
-		saveGame(event.RoomID, game)
+		boardImageEvent, err := sendBoardImage(event.RoomID, game.Position().Board())
+		if err == nil {
+			saveGame(event.RoomID, game, boardImageEvent.EventID)
+		}
 
 		break
 	default:
@@ -192,25 +190,29 @@ func HandleMessage(source mautrix.EventSource, event *mevent.Event) {
 	if err == nil {
 		handleCommand(source, event, commandParts)
 	} else {
-		game, err := getGame(event.RoomID)
+		gameStateEvent, err := getGameStateEvent(event.RoomID)
+		pgn, err := chess.PGN(strings.NewReader(gameStateEvent.PGN))
 		if err != nil {
-			log.Info("got here 1", err)
+			return
+		}
+		game := chess.NewGame(pgn)
+
+		if err != nil {
 			return
 		}
 		if err = game.MoveStr(messageEventContent.Body); err != nil {
-			log.Info("got here 2", err)
 			return
 		}
 		moves := game.Moves()
 		last := moves[len(moves)-1]
-		err = sendBoardImage(event.RoomID, game.Position().Board(), last.S1(), last.S2())
+
+		App.client.RedactEvent(event.RoomID, gameStateEvent.BoardImageEventID)
+		resp, err := sendBoardImage(event.RoomID, game.Position().Board(), last.S1(), last.S2())
 		if err != nil {
-			log.Info("got here 3", err)
 			return
 		}
-		_, err = saveGame(event.RoomID, game)
+		_, err = saveGame(event.RoomID, game, resp.EventID)
 		if err != nil {
-			log.Info("got here 3", err)
 			return
 		}
 	}
