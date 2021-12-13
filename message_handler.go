@@ -134,7 +134,7 @@ func sendBoardImage(roomID mid.RoomID, board *chess.Board, squares ...chess.Squa
 	return App.client.SendImage(roomID, "chessboard.png", upload.ContentURI)
 }
 
-var StateChessGame = mevent.Type{Type: "com.nevarro.chess.game", Class: mevent.StateEventType}
+var StateChessGame = mevent.Type{Type: "space.nevarro.chess.game", Class: mevent.StateEventType}
 
 type StateChessGameEventContent struct {
 	PGN               string
