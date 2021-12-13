@@ -23,6 +23,8 @@ type ChessBot struct {
 	configuration Configuration
 	olmMachine    *mcrypto.OlmMachine
 	stateStore    *store.StateStore
+
+	// Bot state
 }
 
 var App ChessBot
@@ -191,9 +193,7 @@ func main() {
 		App.stateStore.SetEncryptionEvent(event)
 	})
 
-	syncer.OnEventType(mevent.EventMessage, func(source mautrix.EventSource, event *mevent.Event) {
-		log.Info(event)
-	})
+	syncer.OnEventType(mevent.EventMessage, func(source mautrix.EventSource, event *mevent.Event) { go HandleMessage(source, event) })
 
 	syncer.OnEventType(mevent.EventEncrypted, func(source mautrix.EventSource, event *mevent.Event) {
 		decryptedEvent, err := App.olmMachine.DecryptMegolmEvent(event)
@@ -202,7 +202,7 @@ func main() {
 		} else {
 			log.Debugf("Received encrypted event from %s in %s", event.Sender, event.RoomID)
 			if decryptedEvent.Type == mevent.EventMessage {
-				log.Info(event)
+				go HandleMessage(source, decryptedEvent)
 			}
 		}
 	})
