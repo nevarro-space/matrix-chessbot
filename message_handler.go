@@ -160,7 +160,6 @@ func getGameStateEvent(roomID mid.RoomID) (*StateChessGameEventContent, error) {
 func handleCommand(source mautrix.EventSource, event *mevent.Event, commandParts []string) {
 	switch strings.ToLower(commandParts[0]) {
 	case "new":
-		log.Info(commandParts)
 		game := chess.NewGame()
 		game.AddTagPair("Event", fmt.Sprintf("%s @ %s", event.RoomID.String(), time.Now()))
 		boardImageEvent, err := sendBoardImage(event.RoomID, game.Position().Board())
