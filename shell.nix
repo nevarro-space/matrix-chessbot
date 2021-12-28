@@ -5,6 +5,7 @@ in
   mkShell {
     buildInputs = [
       go
+      imagemagick
       olm
     ] ++ lib.lists.optional (!forCI) [
       goimports
