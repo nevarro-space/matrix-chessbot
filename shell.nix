@@ -7,6 +7,7 @@ in
       go
       imagemagick
       olm
+      pre-commit
     ] ++ lib.lists.optional (!forCI) [
       goimports
       gopls
