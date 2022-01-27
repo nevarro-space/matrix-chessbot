@@ -15,3 +15,6 @@ indent_size = 4
 [*.tmpl]
 indent_style = space
 indent_size = 2
+
+[.github/workflows/*.yml]
+indent_size = 2
