@@ -9,7 +9,7 @@ in
       olm
       pre-commit
     ] ++ lib.lists.optional (!forCI) [
-      goimports
+      gotools
       gopls
       vgo2nix
       yq
