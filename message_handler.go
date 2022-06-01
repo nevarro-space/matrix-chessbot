@@ -190,14 +190,18 @@ func HandleMessage(source mautrix.EventSource, event *mevent.Event) {
 
 	if err == nil {
 		handleCommand(source, event, commandParts)
-	} else if fen := fenRegex.FindString(messageEventContent.Body); fen != "" {
-		fen, err := chess.FEN(fen)
+	} else if fenStr := fenRegex.FindString(messageEventContent.Body); fenStr != "" {
+		fen, err := chess.FEN(fenStr)
 		if err != nil {
+			log.Errorf("Unable to parse FEN (%s): %v", fenStr, err)
 			return
 		}
 
 		game := chess.NewGame(fen)
-		sendBoardImage(event.RoomID, game.Position().Board())
+		_, err = sendBoardImage(event.RoomID, game.Position().Board())
+		if err != nil {
+			log.Errorf("Failed to send board image: %v", err)
+		}
 		return
 	} else {
 
