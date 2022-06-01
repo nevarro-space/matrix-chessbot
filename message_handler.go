@@ -20,6 +20,8 @@ import (
 	mid "maunium.net/go/mautrix/id"
 )
 
+var fenRegex = regexp.MustCompile(`([rnbqkpRNBQKP1-8]{1,8}\/?){8}\s+[wb]\s+(-|K?Q?k?q?)\s+(-|[a-h][3-6])\s+\d+\s+\d+`)
+
 func sendHelp(roomId mid.RoomID) {
 	// send message to channel confirming join (retry 3 times)
 	noticeText := `COMMANDS:
@@ -122,7 +124,7 @@ func boardToPngBytes(board *chess.Board, squares ...chess.Square) ([]byte, error
 }
 
 func sendBoardImage(roomID mid.RoomID, board *chess.Board, squares ...chess.Square) (*mautrix.RespSendEvent, error) {
-	pngBytes, err := boardToPngBytes(board)
+	pngBytes, err := boardToPngBytes(board, squares...)
 	if err != nil {
 		return nil, err
 	}
@@ -188,8 +190,21 @@ func HandleMessage(source mautrix.EventSource, event *mevent.Event) {
 
 	if err == nil {
 		handleCommand(source, event, commandParts)
+	} else if fen := fenRegex.FindString(messageEventContent.Body); fen != "" {
+		fen, err := chess.FEN(fen)
+		if err != nil {
+			return
+		}
+
+		game := chess.NewGame(fen)
+		sendBoardImage(event.RoomID, game.Position().Board())
+		return
 	} else {
+
 		gameStateEvent, err := getGameStateEvent(event.RoomID)
+		if err != nil {
+			return
+		}
 		pgn, err := chess.PGN(strings.NewReader(gameStateEvent.PGN))
 		if err != nil {
 			return
