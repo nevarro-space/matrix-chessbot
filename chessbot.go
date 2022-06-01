@@ -25,6 +25,7 @@ type ChessBot struct {
 	stateStore    *store.StateStore
 
 	// Bot state
+	fenImageStore *store.FenImageStore
 }
 
 var App ChessBot
@@ -105,7 +106,12 @@ func main() {
 
 	App.stateStore = store.NewStateStore(db)
 	if err := App.stateStore.CreateTables(); err != nil {
-		log.Fatal("Failed to create the tables for chessbot.", err)
+		log.Fatal("Failed to create the tables for state store.", err)
+	}
+
+	App.fenImageStore = &store.FenImageStore{DB: db}
+	if err := App.fenImageStore.CreateTables(); err != nil {
+		log.Fatal("Failed to create the tables for fen image store.", err)
 	}
 
 	log.Infof("Logging in %s", App.configuration.Username)

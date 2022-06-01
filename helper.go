@@ -6,12 +6,13 @@ import (
 	_ "strconv"
 	"time"
 
+	"github.com/notnil/chess"
 	"github.com/sethvargo/go-retry"
 	log "github.com/sirupsen/logrus"
 	"maunium.net/go/mautrix"
-	mcrypto "maunium.net/go/mautrix/crypto"
-	mevent "maunium.net/go/mautrix/event"
-	mid "maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/crypto"
+	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/id"
 )
 
 func DoRetry(description string, fn func() (interface{}, error)) (interface{}, error) {
@@ -41,39 +42,86 @@ func DoRetry(description string, fn func() (interface{}, error)) (interface{}, e
 	return nil, err
 }
 
-func SendMessage(roomId mid.RoomID, content *mevent.MessageEventContent) (resp *mautrix.RespSendEvent, err error) {
-	eventContent := &mevent.Content{Parsed: content}
-	r, err := DoRetry(fmt.Sprintf("send message to %s", roomId), func() (interface{}, error) {
-		if App.stateStore.IsEncrypted(roomId) {
-			log.Debugf("Sending encrypted event to %s", roomId)
-			encrypted, err := App.olmMachine.EncryptMegolmEvent(roomId, mevent.EventMessage, eventContent)
+func encryptMessageEventContent(roomID id.RoomID, eventContent *event.MessageEventContent) (event.Type, interface{}, error) {
+	if !App.stateStore.IsEncrypted(roomID) {
+		return event.EventMessage, eventContent, nil
+	}
 
-			// These three errors mean we have to make a new Megolm session
-			if err == mcrypto.SessionExpired || err == mcrypto.SessionNotShared || err == mcrypto.NoGroupSession {
-				err = App.olmMachine.ShareGroupSession(roomId, App.stateStore.GetRoomMembers(roomId))
-				if err != nil {
-					log.Errorf("Failed to share group session to %s: %s", roomId, err)
-					return nil, err
-				}
+	log.Debugf("Encrypting event for %s", roomID)
+	encrypted, err := App.olmMachine.EncryptMegolmEvent(roomID, event.EventMessage, eventContent)
 
-				encrypted, err = App.olmMachine.EncryptMegolmEvent(roomId, mevent.EventMessage, eventContent)
-			}
-
-			if err != nil {
-				log.Errorf("Failed to encrypt message to %s: %s", roomId, err)
-				return nil, err
-			}
-
-			encrypted.RelatesTo = content.RelatesTo // The m.relates_to field should be unencrypted, so copy it.
-			return App.client.SendMessageEvent(roomId, mevent.EventEncrypted, encrypted)
-		} else {
-			log.Debugf("Sending unencrypted event to %s", roomId)
-			return App.client.SendMessageEvent(roomId, mevent.EventMessage, eventContent)
+	// These three errors mean we have to make a new Megolm session
+	if err == crypto.SessionExpired || err == crypto.SessionNotShared || err == crypto.NoGroupSession {
+		err = App.olmMachine.ShareGroupSession(roomID, App.stateStore.GetRoomMembers(roomID))
+		if err != nil {
+			log.Errorf("Failed to share group session to %s: %s", roomID, err)
+			return event.EventMessage, eventContent, err
 		}
+
+		encrypted, err = App.olmMachine.EncryptMegolmEvent(roomID, event.EventMessage, eventContent)
+	}
+
+	if err != nil {
+		log.Errorf("Failed to encrypt message to %s: %s", roomID, err)
+		return event.EventMessage, eventContent, err
+	}
+
+	encrypted.RelatesTo = eventContent.RelatesTo // The m.relates_to field should be unencrypted, so copy it.
+
+	return event.EventEncrypted, encrypted, nil
+}
+
+func SendMessage(roomId id.RoomID, content *event.MessageEventContent) (resp *mautrix.RespSendEvent, err error) {
+	r, err := DoRetry(fmt.Sprintf("send message to %s", roomId), func() (interface{}, error) {
+		eventType, encrypted, err := encryptMessageEventContent(roomId, content)
+		if err != nil {
+			return nil, err
+		}
+		return App.client.SendMessageEvent(roomId, eventType, encrypted)
 	})
 	if err != nil {
 		// give up
 		log.Errorf("Failed to send message to %s: %s", roomId, err)
+		return nil, err
+	}
+	return r.(*mautrix.RespSendEvent), err
+}
+
+func SendBoardImage(roomID id.RoomID, board *chess.Board, replyingTo *id.EventID, squares ...chess.Square) (*mautrix.RespSendEvent, error) {
+	pngBytes, err := boardToPngBytes(board, squares...)
+	if err != nil {
+		return nil, err
+	}
+
+	upload, err := App.client.UploadBytesWithName(pngBytes, "image/png", "chessboard.png")
+	if err != nil {
+		return nil, err
+	}
+
+	content := event.MessageEventContent{
+		MsgType: event.MsgImage,
+		Body:    "chessboard.png",
+		URL:     upload.ContentURI.CUString(),
+	}
+
+	if replyingTo != nil {
+		content.SetRelatesTo(&event.RelatesTo{
+			Type:    event.RelationType("m.thread"),
+			EventID: *replyingTo,
+		})
+	}
+
+	r, err := DoRetry(fmt.Sprintf("send chess board image to %s", roomID), func() (interface{}, error) {
+		eventType, encrypted, err := encryptMessageEventContent(roomID, &content)
+		if err != nil {
+			return nil, err
+		}
+		return App.client.SendMessageEvent(roomID, eventType, encrypted)
+	})
+
+	if err != nil {
+		// give up
+		log.Errorf("Failed to send message to %s: %s", roomID, err)
 		return nil, err
 	}
 	return r.(*mautrix.RespSendEvent), err
