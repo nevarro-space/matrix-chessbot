@@ -173,7 +173,7 @@ func HandleMessage(source mautrix.EventSource, event *mevent.Event) {
 	defer App.client.MarkRead(event.RoomID, event.ID)
 
 	messageEventContent := event.Content.AsMessage()
-	commandParts, err := getCommandParts(messageEventContent.Body)
+	messageEventContent.RemoveReplyFallback()
 
 	relatesTo := messageEventContent.GetRelatesTo()
 	var relatedEventID mid.EventID
@@ -189,7 +189,7 @@ func HandleMessage(source mautrix.EventSource, event *mevent.Event) {
 		relatedEventID = event.ID
 	}
 
-	if err == nil {
+	if commandParts, err := getCommandParts(messageEventContent.Body); err == nil {
 		handleCommand(source, event, commandParts)
 	} else if fenStr := fenRegex.FindString(messageEventContent.Body); fenStr != "" {
 		fen, err := chess.FEN(fenStr)
