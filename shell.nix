@@ -11,7 +11,7 @@ in
     ] ++ lib.lists.optional (!forCI) [
       gotools
       gopls
-      vgo2nix
+      # vgo2nix
       yq
     ];
   }
