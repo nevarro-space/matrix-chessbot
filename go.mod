@@ -1,4 +1,4 @@
-module github.com/sumnerevans/matrix-chessbot
+module github.com/nevarro-space/matrix-chessbot
 
 go 1.16
 

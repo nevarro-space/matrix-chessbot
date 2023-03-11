@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"image/color"
-	"io/ioutil"
+	"io"
 	"os"
 	"os/exec"
 	"regexp"
@@ -28,14 +28,14 @@ func sendHelp(roomId mid.RoomID) {
 * new -- start a new game of chess
 * help -- show this help
 
-Version %s. Source code: https://github.com/sumnerevans/matrix-chessbot`
+Version %s. Source code: https://github.com/nevarro-space/matrix-chessbot`
 	noticeHtml := `<b>COMMANDS:</b>
 <ul>
 <li><b>new</b> &mdash; start a new game of chess</li>
 <li><b>help</b> &mdash; show this help</li>
 </ul>
 
-Version %s. <a href="https://github.com/sumnerevans/matrix-chessbot">Source code</a>.`
+Version %s. <a href="https://github.com/nevarro-space/matrix-chessbot">Source code</a>.`
 
 	SendMessage(roomId, &mevent.MessageEventContent{
 		MsgType:       mevent.MsgNotice,
@@ -82,7 +82,7 @@ func getCommandParts(body string) ([]string, error) {
 		}
 	}
 	if !isCommand {
-		return []string{}, errors.New("Not a command")
+		return []string{}, errors.New("not a command")
 	}
 
 	return commandParts, nil
@@ -115,12 +115,12 @@ func boardToPngBytes(board *chess.Board, squares ...chess.Square) ([]byte, error
 	}
 
 	pngFile, err := os.Open(pngTempfile.Name())
-	defer pngFile.Close()
 	if err != nil {
 		return []byte{}, err
 	}
+	defer pngFile.Close()
 
-	return ioutil.ReadAll(pngFile)
+	return io.ReadAll(pngFile)
 }
 
 var StateChessGame = mevent.Type{Type: "space.nevarro.chess.game", Class: mevent.StateEventType}
@@ -156,10 +156,8 @@ func handleCommand(source mautrix.EventSource, event *mevent.Event, commandParts
 			saveGame(event.RoomID, game, boardImageEvent.EventID)
 		}
 
-		break
 	default:
 		sendHelp(event.RoomID)
-		break
 	}
 }
 

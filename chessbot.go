@@ -15,7 +15,7 @@ import (
 	mevent "maunium.net/go/mautrix/event"
 	mid "maunium.net/go/mautrix/id"
 
-	"github.com/sumnerevans/matrix-chessbot/store"
+	"github.com/nevarro-space/matrix-chessbot/store"
 )
 
 type ChessBot struct {
@@ -89,7 +89,6 @@ func main() {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c,
 		os.Interrupt,
-		os.Kill,
 		syscall.SIGABRT,
 		syscall.SIGHUP,
 		syscall.SIGINT,
