@@ -22,6 +22,9 @@ jobs:
           go install honnef.co/go/tools/cmd/staticcheck@v0.3.3
           export PATH="$HOME/go/bin:$PATH"
 
+          sudo apt-get install libolm-dev libolm3
+
+
       - name: Run pre-commit
         uses: pre-commit/action@v3.0.0
 
